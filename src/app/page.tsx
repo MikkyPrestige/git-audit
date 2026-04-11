@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { ScoreCard } from "@/components/audit/ScoreCard";
 import { Badge } from "@/components/ui/badge";
 import { AuditResult } from "@/types/audit";
+import { METRIC_CONFIG } from "@/constants/metrics"
+import { AuditMetric } from "@/types/audit";
 import {
     Menu,
     History,
@@ -35,6 +37,18 @@ import {
     SheetTrigger,
 } from "@/components/ui/sheet";
 
+const AUDIT_STEPS = [
+    "Fetching repository data...",
+    "Analyzing Technical Architecture...",
+    "Evaluating Security & Vulnerabilities...",
+    "Scanning Modularity & Patterns...",
+    "Checking Documentation Quality...",
+    "Assessing Community & Activity...",
+    "Testing Performance Bottlenecks...",
+    "Reviewing Dependency Health...",
+    "Finalizing Forensic Verdict..."
+];
+
 export default function Home() {
     const [url, setUrl] = useState("");
     const [focus, setFocus] = useState("");
@@ -50,6 +64,7 @@ export default function Home() {
     const [isComparing, setIsComparing] = useState(false);
     const [compareError, setCompareError] = useState<string | null>(null);
     const [activeSlot, setActiveSlot] = useState<'A' | 'B'>('A');
+    const [loadingStep, setLoadingStep] = useState(0);
 
     useEffect(() => {
         const saved = localStorage.getItem("git_audit_history");
@@ -99,6 +114,20 @@ export default function Home() {
         });
     };
 
+    const clearAllHistory = () => {
+        if (window.confirm("Are you sure you want to clear your entire audit history?")) {
+            localStorage.removeItem("git_audit_history");
+            setHistory([]);
+        }
+    };
+
+    const deleteHistoryItem = (e: React.MouseEvent, index: number) => {
+        e.stopPropagation();
+        const newHistory = history.filter((_, i) => i !== index);
+        setHistory(newHistory);
+        localStorage.setItem("git_audit_history", JSON.stringify(newHistory));
+    };
+
     const loadAuditFromHistory = (item: AuditResult) => {
         const historyUrl = item.metadata?.url ||
             (item.metadata ? `https://github.com/${item.metadata.owner}/${item.metadata.repo}` : "");
@@ -133,22 +162,35 @@ export default function Home() {
 
     async function handleAudit(passedUrl?: string) {
         setLoading(true);
+        setLoadingStep(0);
         setError(null);
         setResult(null);
 
         const targetUrl = passedUrl || url;
+
+        const stepInterval = setInterval(() => {
+            setLoadingStep((prev) => (prev < AUDIT_STEPS.length - 1 ? prev + 1 : prev));
+        }, 2800);
+
         try {
             const res = await auditRepository(targetUrl, focus || undefined);
             if (!res.error && res.audit) {
-                setResult(res);
-                addToHistory(res);
+                setTimeout(() => {
+                    setResult(res);
+                    addToHistory(res);
 
-                const newUrl = new URL(window.location.href);
-                newUrl.searchParams.set('repo', targetUrl);
-                window.history.replaceState({}, '', newUrl.toString());
+                    const newUrl = new URL(window.location.href);
+                    newUrl.searchParams.set('repo', targetUrl);
+                    window.history.replaceState({}, '', newUrl.toString());
+
+                    clearInterval(stepInterval);
+                    setLoading(false);
+                }, 800);
             }
             if (res.error) {
                 setError(getFriendlyErrorMessage(res.error));
+                clearInterval(stepInterval);
+                setLoading(false);
             }
         } catch {
             setError("Something went wrong. Please try again.");
@@ -163,12 +205,17 @@ export default function Home() {
         if (!urlA || !urlB) return;
 
         setIsComparing(true);
+        setLoadingStep(0);
         setCompareError(null);
 
         const params = new URLSearchParams();
         params.set('repoA', urlA);
         params.set('repoB', urlB);
         window.history.pushState({}, '', `?${params.toString()}`);
+
+        const stepInterval = setInterval(() => {
+            setLoadingStep((prev) => (prev < AUDIT_STEPS.length - 1 ? prev + 1 : prev));
+        }, 2800);
 
         try {
             let resultA = compareA;
@@ -196,6 +243,7 @@ export default function Home() {
             setCompareError(friendlyMessage);
             toast.error("Audit Failed", { description: friendlyMessage });
         } finally {
+            clearInterval(stepInterval);
             setIsComparing(false);
         }
     }, [compareUrlA, compareUrlB, compareA, compareB]);
@@ -248,32 +296,93 @@ export default function Home() {
         });
     };
 
+    const getScore = (data: unknown): number => {
+        if (typeof data === 'number') {
+            return data;
+        }
+        if (data !== null && typeof data === 'object' && 'score' in data) {
+            return (data as { score: number }).score;
+        }
+        return 0;
+    };
+
     const chartData = useMemo(() => {
         if (!compareA?.audit || !compareB?.audit) return [];
+
+        const metrics = METRIC_CONFIG.map(metric => ({
+            subject: metric.label,
+            A: getScore(compareA.audit?.[metric.key]),
+            B: getScore(compareB.audit?.[metric.key]),
+            fullMark: 100
+        }));
+
         return [
-            { subject: 'Overall', A: compareA.audit.overallScore, B: compareB.audit.overallScore, fullMark: 100 },
-            { subject: 'Technical', A: compareA.audit.technicalScore, B: compareB.audit.technicalScore, fullMark: 100 },
-            { subject: 'Docs', A: compareA.audit.documentationScore, B: compareB.audit.documentationScore, fullMark: 100 },
-            { subject: 'Pro', A: compareA.audit.professionalismScore, B: compareB.audit.professionalismScore, fullMark: 100 }
+            {
+                subject: 'Overall',
+                A: compareA.audit.overallScore,
+                B: compareB.audit.overallScore,
+                fullMark: 100
+            },
+            ...metrics
         ];
     }, [compareA, compareB]);
 
     const HistoryList = () => (
         <div className="flex flex-col gap-2">
-            {history.length === 0 && <p className="text-xs text-muted-foreground italic p-4">No history yet.</p>}
-            {history.map((item, i) => (
-                <button
-                    key={i}
-                    onClick={() => loadAuditFromHistory(item)}
-                    className="text-left p-3 rounded-lg hover:bg-accent transition-all group border border-transparent hover:border-border"
-                >
-                    <p className="text-sm font-medium truncate">{item.metadata?.repo}</p>
-                    <div className="flex justify-between items-center mt-1">
-                        <p className="text-[10px] text-muted-foreground uppercase">{item.audit?.verdict}</p>
-                        {item.metadata?.focus && <span className="text-[9px] text-primary"><Target className="w-4 h-4" /> Focus</span>}
+            <div className="flex items-center justify-between px-2 mb-2">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                    {history.length} Saved
+                </span>
+                {history.length > 0 && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAllHistory}
+                        className="h-6 px-2 text-[10px] text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                        Clear All
+                    </Button>
+                )}
+            </div>
+
+            {history.length === 0 && (
+                <div className="text-center py-8 px-4 border border-dashed rounded-xl">
+                    <p className="text-xs text-muted-foreground italic">No history yet.</p>
+                </div>
+            )}
+
+            {history.map((item, i) => {
+
+                return (
+                    <div
+                        key={i}
+                        onClick={() => loadAuditFromHistory(item)}
+                        role="button"
+                        className="text-left p-3 rounded-lg hover:bg-accent transition-all group border border-transparent hover:border-border relative"
+                    >
+                        <div className="flex justify-between items-start gap-2">
+                            <p className="text-sm font-semibold truncate flex-1">{item.metadata?.repo}</p>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => deleteHistoryItem(e, i)}
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 hover:text-destructive transition-all"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                            </Button>
+                        </div>
+
+                        <div className="flex justify-between items-center mt-1">
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
+                                {item.audit?.verdict}
+                            </p>
+                            <span className="text-[10px] font-mono font-bold text-primary">
+                                {item.audit?.overallScore}%
+                            </span>
+                        </div>
                     </div>
-                </button>
-            ))}
+                );
+            })}
         </div>
     );
 
@@ -281,6 +390,36 @@ export default function Home() {
         if (e.key === 'Enter' && !isComparing && (compareUrlA || compareA) && (compareUrlB || compareB)) {
             handleCompareRun();
         }
+    };
+
+    const renderMetricGroup = (groupKey: string, sectionTitle: string) => {
+        if (!result?.audit) return null;
+
+        const metricsInGroup = METRIC_CONFIG.filter((m) => m.group === groupKey);
+
+        return (
+            <div className="space-y-4">
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 px-1">
+                    {sectionTitle}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {metricsInGroup.map((metric) => {
+                        const data = result.audit![metric.key] as AuditMetric;
+                        if (!data) return null;
+
+                        return (
+                            <ScoreCard
+                                key={metric.key}
+                                label={metric.label}
+                                icon={metric.icon}
+                                score={data.score}
+                                insight={data.insight}
+                            />
+                        );
+                    })}
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -408,21 +547,6 @@ export default function Home() {
                                     <div className="flex flex-1 gap-2">
                                         <Button
                                             variant="outline"
-                                            size="icon"
-                                            onClick={copyShareLink}
-                                            disabled={
-                                                viewMode === "single"
-                                                    ? !result
-                                                    : (!compareA || !compareB)
-                                            }
-                                            className="h-12 w-12 shrink-0"
-                                            title="Share Audit"
-                                        >
-                                            <Share2 className="w-4 h-4" />
-                                        </Button>
-
-                                        <Button
-                                            variant="outline"
                                             size="sm"
                                             onClick={handleClear}
                                             disabled={!url && !result && !error}
@@ -434,6 +558,43 @@ export default function Home() {
                                     </div>
                                 </div>
                             </div>
+
+                            {loading && (
+                                <div className="flex flex-col items-center justify-center py-10 space-y-8 animate-in fade-in zoom-in duration-500">
+                                    <div className="relative flex items-center justify-center">
+                                        <div className="w-20 h-20 border-4 border-primary/10 border-t-primary rounded-full animate-spin" />
+                                        <div className="absolute w-12 h-12 bg-primary/5 rounded-full animate-pulse flex items-center justify-center">
+                                            <Search className="w-5 h-5 text-primary opacity-50" />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col items-center gap-4 w-full max-w-xs">
+                                        <div className="space-y-1 text-center">
+                                            <h3 className="text-sm font-black tracking-[0.2em] uppercase text-primary">
+                                                Audit in Progress
+                                            </h3>
+                                            <div className="flex items-center justify-center gap-2 text-muted-foreground font-mono text-[10px]">
+                                                <span className="relative flex h-2 w-2">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                                                </span>
+                                                {AUDIT_STEPS[loadingStep]}
+                                            </div>
+                                        </div>
+
+                                        <div className="w-full h-1 bg-muted rounded-full overflow-hidden border border-border">
+                                            <div
+                                                className="h-full bg-primary transition-all duration-1000 ease-in-out"
+                                                style={{ width: `${((loadingStep + 1) / AUDIT_STEPS.length) * 100}%` }}
+                                            />
+                                        </div>
+
+                                        <p className="text-[9px] text-muted-foreground italic">
+                                            Scanning file tree and analyzing package dependencies...
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             {error && (
                                 <div className="relative p-4 rounded-2xl bg-destructive/5 border border-destructive/20 text-destructive animate-in fade-in zoom-in-95 duration-300">
@@ -466,36 +627,83 @@ export default function Home() {
                             )}
 
                             {result?.audit && !loading && (
-                                <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                    <div className="flex flex-wrap gap-2 items-center">
-                                        <Badge variant="outline" className="px-3 py-1 bg-primary/5 border-primary/20 text-primary">
-                                            {result.metadata?.repo}
-                                        </Badge>
-                                        {focus && <Badge className="flex gap-1"><Target className="w-3 h-3" /> {focus}</Badge>}
-                                    </div>
+                                <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-                                        <ScoreCard label="Overall" score={result.audit.overallScore} />
-                                        <ScoreCard label="Technical" score={result.audit.technicalScore} />
-                                        <ScoreCard label="Docs" score={result.audit.documentationScore} />
-                                        <ScoreCard label="Pro" score={result.audit.professionalismScore} />
-                                    </div>
-
-                                    <div className="p-6 rounded-2xl border bg-card shadow-sm">
-                                        <h3 className="font-bold mb-3 flex items-center gap-2 uppercase text-xs tracking-widest opacity-60"><GitCompare className="w-4 h-4 text-primary" />Architect&apos;s Summary</h3>
-                                        <p className="text-muted-foreground leading-relaxed text-base sm:text-lg">{result.audit.summary}</p>
-                                    </div>
-
-                                    <div className="grid gap-3">
-                                        <h3 className="font-bold uppercase text-xs tracking-widest opacity-60 px-1 flex items-center gap-2"><Sparkles className="w-4 h-4 text-blue-500" />Suggested Improvements</h3>
-                                        {result.audit.improvements.map((item, i) => (
-                                            <div key={i} className="flex gap-4 p-4 rounded-xl bg-muted/40 border border-transparent hover:border-border transition-all">
-                                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-black">
-                                                    {i + 1}
-                                                </span>
-                                                <p className="text-sm sm:text-base leading-snug">{item}</p>
+                                    {/* --- HEADER & OVERALL --- */}
+                                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                                        <div className="space-y-3">
+                                            <div className="flex flex-wrap gap-2 items-center">
+                                                <Badge variant="outline" className="px-3 py-1 bg-primary/5 border-primary/20 text-primary font-mono">
+                                                    {result.metadata?.repo}
+                                                </Badge>
+                                                {focus && (
+                                                    <Badge className="flex gap-1 bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20">
+                                                        <Target className="w-3 h-3" /> {focus}
+                                                    </Badge>
+                                                )}
                                             </div>
-                                        ))}
+                                            <h2 className="text-3xl font-black tracking-tight flex items-center gap-3">
+                                                Audit Report
+                                                <span className="text-muted-foreground/20 font-light">|</span>
+                                                <span className={result.audit.overallScore >= 80 ? "text-emerald-500" : "text-amber-500"}>
+                                                    {result.audit.overallScore}%
+                                                </span>
+                                            </h2>
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <Button variant="outline" size="sm" onClick={copyShareLink} className="rounded-full h-9">
+                                                <Share2 className="w-3.5 h-3.5 mr-2" /> Share Result
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {/* --- 9-POINT METRIC GRID --- */}
+                                    <div className="flex flex-col gap-12">
+                                        {renderMetricGroup("quality", "Code & Architecture")}
+                                        {renderMetricGroup("vitality", "Project Vitality")}
+                                        {renderMetricGroup("risk", "Security & Performance")}
+                                    </div>
+
+                                    {/* --- ARCHITECT SUMMARY --- */}
+                                    <div className="p-8 rounded-3xl border bg-gradient-to-br from-card to-muted/20 shadow-sm relative overflow-hidden group">
+                                        <div className="relative z-10">
+                                            <h3 className="font-bold mb-4 flex items-center gap-2 uppercase text-[10px] tracking-[0.2em] opacity-60">
+                                                <GitCompare className="w-4 h-4 text-primary" />
+                                                Architect&apos;s Summary
+                                            </h3>
+                                            <p className="text-muted-foreground leading-relaxed text-lg md:text-xl font-medium decoration-primary/20 underline-offset-4">
+                                                &quot;{result.audit.summary}&quot;
+                                            </p>
+                                            <div className="mt-6 flex items-center gap-3">
+                                                <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary uppercase">
+                                                    Verdict: {result.audit.verdict}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
+                                            <Scale className="w-32 h-32 rotate-12" />
+                                        </div>
+                                    </div>
+
+                                    {/* --- IMPROVEMENTS --- */}
+                                    <div className="grid gap-4">
+                                        <h3 className="font-bold uppercase text-[10px] tracking-[0.2em] opacity-60 px-1 flex items-center gap-2">
+                                            <Sparkles className="w-4 h-4 text-blue-500" />
+                                            Strategic Roadmap
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {result.audit.improvements.map((item, i) => (
+                                                <div key={i} className="flex gap-4 p-5 rounded-2xl bg-muted/30 border border-transparent hover:border-border hover:bg-card transition-all group">
+                                                    <span className="flex-shrink-0 w-8 h-8 rounded-xl bg-background border shadow-sm text-primary flex items-center justify-center text-xs font-black group-hover:scale-110 transition-transform">
+                                                        {i + 1}
+                                                    </span>
+                                                    <p className="text-sm leading-relaxed text-muted-foreground group-hover:text-foreground transition-colors">
+                                                        {item}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -601,6 +809,50 @@ export default function Home() {
                                 </div>
                             </div>
 
+                            {isComparing && (
+                                <div className="flex flex-col items-center justify-center py-10 space-y-10 animate-in fade-in zoom-in duration-500">
+                                    <div className="relative flex items-center justify-center">
+                                        <div className="absolute w-24 h-24 border-2 border-dashed border-primary/20 rounded-full animate-[spin_10s_linear_infinite]" />
+                                        <div className="w-16 h-16 border-4 border-primary/10 border-t-primary rounded-full animate-spin" />
+                                        <div className="absolute flex items-center gap-2">
+                                            <GitCompare className="w-6 h-6 text-primary" />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col items-center gap-6 w-full max-w-md text-center">
+                                        <div className="space-y-1">
+                                            <h3 className="text-sm font-black tracking-[0.3em] uppercase text-primary">
+                                                Dual-Engine Forensic Analysis
+                                            </h3>
+                                            <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">
+                                                Comparing: {compareUrlA.split('/').pop()} + {compareUrlB.split('/').pop()}
+                                            </p>
+                                        </div>
+
+                                        <div className="flex items-center justify-center gap-3 text-muted-foreground font-mono text-[11px] bg-muted/50 px-4 py-2 rounded-full border border-border">
+                                            <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                                            </span>
+                                            {AUDIT_STEPS[loadingStep]}
+                                        </div>
+
+                                        <div className="w-full space-y-2">
+                                            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden border border-border p-[2px]">
+                                                <div
+                                                    className="h-full bg-primary rounded-full transition-all duration-1000 ease-in-out shadow-[0_0_10px_rgba(var(--primary),0.5)]"
+                                                    style={{ width: `${((loadingStep + 1) / AUDIT_STEPS.length) * 100}%` }}
+                                                />
+                                            </div>
+                                            <div className="flex justify-between text-[9px] font-bold text-muted-foreground/50 uppercase tracking-tighter">
+                                                <span>Initiating Scan</span>
+                                                <span>{Math.round(((loadingStep + 1) / AUDIT_STEPS.length) * 100)}% Complete</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {compareA?.audit && compareB?.audit && !isComparing && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                                     {[compareA, compareB].map((res, idx) => {
@@ -621,26 +873,37 @@ export default function Home() {
                                                 </div>
 
                                                 <div className="space-y-2">
-                                                    {[
-                                                        { label: 'Overall', key: 'overallScore' },
-                                                        { label: 'Technical', key: 'technicalScore' },
-                                                        { label: 'Docs', key: 'documentationScore' }
-                                                    ].map((stat) => (
-                                                        <div key={stat.label} className="flex justify-between items-center p-3 border rounded-xl bg-background/50">
-                                                            <span className="font-medium text-xs sm:text-sm">{stat.label}</span>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-lg sm:text-xl font-black">
-                                                                    {res.audit?.[stat.key]}
-                                                                </span>
-                                                                <div className="hidden md:block">
-                                                                    {typeof res.audit?.[stat.key] === 'number' && typeof other.audit?.[stat.key] === 'number'
-                                                                        ? getDelta(res.audit[stat.key] as number, other.audit[stat.key] as number)
-                                                                        : null
-                                                                    }
-                                                                </div>
+                                                    <div className="flex justify-between items-center p-3 border rounded-xl bg-primary/5 border-primary/20">
+                                                        <span className="font-bold text-xs sm:text-sm uppercase tracking-wider">Overall Grade</span>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-xl font-black">{res.audit?.overallScore}</span>
+                                                            <div className="hidden md:block">
+                                                                {getDelta(res.audit?.overallScore ?? 0, other.audit?.overallScore ?? 0)}
                                                             </div>
                                                         </div>
-                                                    ))}
+                                                    </div>
+                                                    <div className="grid grid-cols-1 gap-1.5">
+                                                        {METRIC_CONFIG.map((metric) => {
+                                                            const scoreA = getScore(res.audit?.[metric.key]);
+                                                            const scoreB = getScore(other.audit?.[metric.key]);
+                                                            const Icon = metric.icon;
+
+                                                            return (
+                                                                <div key={metric.key} className="flex justify-between items-center p-2.5 border rounded-lg bg-background/50 group hover:bg-muted/50 transition-colors">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Icon className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                                        <span className="text-[11px] font-medium text-muted-foreground">{metric.label}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-sm font-bold">{scoreA}</span>
+                                                                        <div className="scale-75 origin-right opacity-70">
+                                                                            {getDelta(scoreA, scoreB)}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
 
                                                 <div className="p-4 rounded-xl bg-muted/30 border text-xs sm:text-sm mt-2 italic text-muted-foreground leading-relaxed">
@@ -669,7 +932,7 @@ export default function Home() {
                                 </div>
                             )}
 
-                            {/* --- VERDICT --- */}
+                            {/* --- VERDICT SECTION --- */}
                             {compareA?.audit && compareB?.audit && (
                                 <div className="mt-8 p-6 border-2 border-primary/20 bg-primary/5 rounded-2xl">
                                     <h3 className="text-xl font-black mb-4 flex items-center gap-2 uppercase">
@@ -683,7 +946,7 @@ export default function Home() {
                                                     ? `**${compareA.metadata?.repo}** leads in overall quality.`
                                                     : `**${compareB.metadata?.repo}** holds the higher overall score.`}
 
-                                                {Math.abs(compareA.audit.technicalScore - compareB.audit.technicalScore) > 10 &&
+                                                {Math.abs(getScore(compareA.audit.technical) - getScore(compareB.audit.technical)) > 10 &&
                                                     " There is a significant gap in technical implementation."}
                                             </p>
                                         </div>
@@ -691,12 +954,12 @@ export default function Home() {
                                         <div className="space-y-2">
                                             <h4 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Best Choice For...</h4>
                                             <div className="flex flex-wrap gap-2">
-                                                {compareA.audit.documentationScore > 80 && (
+                                                {getScore(compareA.audit.documentation) > 80 && (
                                                     <span className="px-2 py-1 rounded bg-background border text-xs font-medium">
                                                         Best Docs: {compareA.metadata?.repo}
                                                     </span>
                                                 )}
-                                                {compareB.audit.technicalScore > compareA.audit.technicalScore && (
+                                                {getScore(compareB.audit.technical) > getScore(compareA.audit.technical) && (
                                                     <span className="px-2 py-1 rounded bg-background border text-xs font-medium">
                                                         Stronger Code: {compareB.metadata?.repo}
                                                     </span>

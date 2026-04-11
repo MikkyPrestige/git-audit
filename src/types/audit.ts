@@ -1,16 +1,25 @@
-export interface AuditData {
-  overallScore: number;
-  professionalismScore: number;
-  documentationScore: number;
-  technicalScore: number;
-  summary: string;
-  improvements: string[];
-  verdict: string;
-  // Optional metrics to might add later
-  performance?: number;
-  accessibility?: number;
+export type AuditMetric = {
+  score: number;
+  insight: string;
+};
 
-  [key: string]: string | number | string[] | undefined;
+export interface AuditData {
+  analyzedAt: string;
+  overallScore: number;
+  summary: string;
+  verdict: string;
+  improvements: string[];
+  technical: AuditMetric;
+  maintainability: AuditMetric;
+  modularity: AuditMetric;
+  documentation: AuditMetric;
+  community: AuditMetric;
+  longevity: AuditMetric;
+  security: AuditMetric;
+  performance: AuditMetric;
+  professionalism: AuditMetric;
+
+  [key: string]: AuditMetric | number | string | string[] | undefined;
 }
 
 export interface AuditResult {
@@ -29,37 +38,6 @@ export interface AuditResult {
 export interface ScoreCardProps {
   label: string;
   score: number;
+  insight: string;
+  icon?: React.ElementType;
 }
-
-// export interface AuditResult {
-//   success?: boolean;
-//   error?: string;
-//   metadata?: {
-//     owner: string;
-//     repo: string;
-//     url: string;
-//     focus?: string;
-//   };
-//   audit?: {
-//     overallScore: number;
-//     professionalismScore: number;
-//     documentationScore: number;
-//     technicalScore: number;
-//     summary: string;
-//     improvements: string[];
-//     verdict: string;
-//   };
-//   warnings?: string[];
-// }
-
-// export interface AuditData {
-//   [key: string]: number | string | undefined;
-//   performance?: number;
-//   accessibility?: number;
-// }
-
-
-// export interface ScoreCardProps {
-//     label: string;
-//     score: number;
-// }

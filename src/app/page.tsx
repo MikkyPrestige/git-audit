@@ -79,11 +79,11 @@ export default function Home() {
 
     useEffect(() => {
         if (result?.metadata?.repo) {
-            document.title = `Audit: ${result.metadata.repo} | GitAudit AI`;
+            document.title = `Audit: ${result.metadata.repo} | GitAudit`;
         } else if (compareA && compareB) {
-            document.title = `${compareA.metadata?.repo} vs ${compareB.metadata?.repo} | GitAudit AI`;
+            document.title = `${compareA.metadata?.repo} vs ${compareB.metadata?.repo} | GitAudit`;
         } else {
-            document.title = "GitAudit AI";
+            document.title = "GitAudit";
         }
     }, [result, compareA, compareB]);
 
@@ -442,7 +442,7 @@ export default function Home() {
                 <header className="flex md:hidden items-center justify-between p-4 border-b bg-background/80 backdrop-blur-md sticky top-0 z-50">
                     <div className="flex items-center gap-2">
                         <LayoutDashboard className="w-5 h-5 text-primary" />
-                        <span className="font-bold text-lg">GitAudit AI</span>
+                        <span className="font-bold text-lg">GitAudit</span>
                     </div>
                     <Sheet>
                         <SheetTrigger asChild>
@@ -467,7 +467,7 @@ export default function Home() {
 
                 <div className="p-6 md:p-12 lg:p-20 flex flex-col gap-8">
                     <div className="hidden md:block">
-                        <h1 className="text-4xl font-black tracking-tight">GitAudit AI</h1>
+                        <h1 className="text-4xl font-black tracking-tight">GitAudit</h1>
                         <p className="text-muted-foreground mt-2">Deep architectural analysis for any GitHub repository.</p>
                     </div>
 

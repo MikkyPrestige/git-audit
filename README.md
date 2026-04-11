@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GitAudit
 
-## Getting Started
+A simple, professional tool to audit and compare GitHub repositories. This app helps you understand how a project is built and lets you see how it stacks up against others.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## What it does
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+* **Single Audit:** Paste a GitHub link to get a deep-dive scan of the project's structure and quality.
+* **Comparison Mode:** Put two repositories side-by-side to see the differences in their metrics.
+* **Visual Reports:** Uses clear charts and scores so you don't have to dig through raw data.
+* **Live Progress:** A step-by-step loading bar shows exactly what the app is analyzing in real-time.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## How to Use
 
-## Learn More
+1.  **Enter a URL:** Drop any GitHub repository link into the search bar.
+2.  **Start the Scan:** Click the audit button to trigger the forensic analysis.
+3.  **Check the Results:** View the breakdown of the code and its performance.
+4.  **Compare:** Switch to "Compare Mode" to analyze two projects at the same time.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Installation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+If you want to run this project locally, follow these steps:
 
-## Deploy on Vercel
+1.  **Clone the project**
+    ```bash
+    git clone [https://github.com/MikkyPrestige/GitAudit.git](https://github.com/MikkyPrestige/GitAudit.git)
+    cd GitAudit
+    ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+2.  **Install dependencies**
+    ```bash
+    npm install
+    ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+3.  **Run the application**
+    ```bash
+    npm run dev
+    ```
+
+---
+
+## Technical Details
+
+* **Frontend:** Built with React and TypeScript.
+* **Styling:** Clean, modern UI using Tailwind CSS.
+* **Icons:** Simple and clear visuals using Lucide React.
+
+---
+
+## Author
+
+**MikkyPrestige** (Elue Michael)
